@@ -1,0 +1,19 @@
+{
+  "name": "PLAMO STOCK",
+  "short_name": "PLAMO STOCK",
+  "description": "積みプラと塗料を写真つきで管理するアプリ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f0e9",
+  "theme_color": "#151814",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

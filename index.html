@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#151814" />
+    <meta name="description" content="積みプラと塗料を、写真つきで管理できるオフライン対応アプリ" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>PLAMO STOCK</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="site-header">
+        <a class="brand" href="#dashboard" aria-label="PLAMO STOCK ホーム">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>
+            <strong>PLAMO STOCK</strong>
+            <small>BUILD &amp; COLOR ARCHIVE</small>
+          </span>
+        </a>
+
+        <nav class="desktop-nav" aria-label="メインメニュー">
+          <button class="nav-button is-active" data-view="dashboard">ダッシュボード</button>
+          <button class="nav-button" data-view="kits">プラモデル</button>
+          <button class="nav-button" data-view="paints">塗料</button>
+        </nav>
+
+        <div class="header-actions">
+          <button class="icon-button" id="backupButton" type="button" aria-label="バックアップ設定" title="バックアップ設定">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 18v2h14v-2" /></svg>
+          </button>
+          <button class="primary-button compact" id="quickAddButton" type="button">
+            <span aria-hidden="true">＋</span> 新規登録
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="view is-active" id="dashboardView" data-view-panel="dashboard" aria-labelledby="dashboardTitle">
+          <div class="dashboard-hero">
+            <div class="hero-copy">
+              <p class="eyebrow">YOUR HOBBY INVENTORY</p>
+              <h1 id="dashboardTitle">積みを、<br /><span>見える化。</span></h1>
+              <p>未組立キットから完成品、塗料の残量まで。作業机に立つ前に、手持ちがすぐわかる。</p>
+              <div class="hero-actions">
+                <button class="primary-button" id="heroAddKit" type="button">プラモデルを登録</button>
+                <button class="secondary-button" id="heroAddPaint" type="button">塗料を登録</button>
+              </div>
+            </div>
+            <div class="hero-panel" aria-label="コレクション概要">
+              <div class="hero-panel-top">
+                <span>COLLECTION STATUS</span>
+                <span id="todayLabel"></span>
+              </div>
+              <div class="completion-ring" id="completionRing">
+                <div><strong id="completionRate">0</strong><span>%</span><small>BUILD RATE</small></div>
+              </div>
+              <div class="hero-panel-bottom">
+                <span>完成済み</span>
+                <strong id="heroBuiltCount">0 / 0</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="metric-grid" aria-label="在庫集計">
+            <article class="metric-card accent">
+              <div class="metric-icon stacked" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div><span>未組立</span><strong id="metricUnbuilt">0</strong><small>積みプラ</small></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-icon cube" aria-hidden="true"></div>
+              <div><span>組立済み</span><strong id="metricBuilt">0</strong><small>完成・製作中</small></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-icon bottle" aria-hidden="true"></div>
+              <div><span>塗料</span><strong id="metricPaints">0</strong><small>登録ボトル</small></div>
+            </article>
+            <article class="metric-card warning">
+              <div class="metric-icon gauge" aria-hidden="true"></div>
+              <div><span>残量わずか</span><strong id="metricLowPaint">0</strong><small>要補充</small></div>
+            </article>
+          </div>
+
+          <div class="dashboard-columns">
+            <section class="panel recent-panel" aria-labelledby="recentTitle">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">RECENTLY ADDED</p>
+                  <h2 id="recentTitle">最近のプラモデル</h2>
+                </div>
+                <button class="text-button" data-go-view="kits" type="button">すべて見る <span aria-hidden="true">→</span></button>
+              </div>
+              <div class="mini-kit-list" id="recentKitList"></div>
+            </section>
+
+            <section class="panel category-panel" aria-labelledby="categoryTitle">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">BY CATEGORY</p>
+                  <h2 id="categoryTitle">カテゴリー内訳</h2>
+                </div>
+              </div>
+              <div class="category-chart" id="categoryChart"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="kitsView" data-view-panel="kits" aria-labelledby="kitsTitle">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">MODEL KIT ARCHIVE</p>
+              <h1 id="kitsTitle">プラモデル</h1>
+              <p id="kitCountLabel">0件を登録中</p>
+            </div>
+            <button class="primary-button" id="addKitButton" type="button"><span aria-hidden="true">＋</span> プラモデルを登録</button>
+          </div>
+
+          <div class="filter-bar">
+            <label class="search-box">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+              <span class="sr-only">プラモデルを検索</span>
+              <input type="search" id="kitSearch" placeholder="名前、シリーズ、店、タグで検索" />
+            </label>
+            <label>
+              <span class="sr-only">組立状況</span>
+              <select id="kitStatusFilter">
+                <option value="all">すべての状態</option>
+                <option value="unbuilt">未組立</option>
+                <option value="built">組立済み</option>
+              </select>
+            </label>
+            <label>
+              <span class="sr-only">カテゴリー</span>
+              <select id="kitCategoryFilter"><option value="all">すべてのカテゴリー</option></select>
+            </label>
+            <label>
+              <span class="sr-only">並び順</span>
+              <select id="kitSort">
+                <option value="newest">登録が新しい順</option>
+                <option value="purchase-newest">購入日が新しい順</option>
+                <option value="name">名前順</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="kit-grid" id="kitGrid"></div>
+        </section>
+
+        <section class="view" id="paintsView" data-view-panel="paints" aria-labelledby="paintsTitle">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">COLOR INVENTORY</p>
+              <h1 id="paintsTitle">塗料</h1>
+              <p id="paintCountLabel">0色を登録中</p>
+            </div>
+            <button class="primary-button" id="addPaintButton" type="button"><span aria-hidden="true">＋</span> 塗料を登録</button>
+          </div>
+
+          <div class="paint-summary" aria-label="塗料在庫の概要">
+            <article><span>登録色数</span><strong id="paintTotal">0</strong></article>
+            <article><span>未開封</span><strong id="paintSealed">0</strong></article>
+            <article class="low"><span>残量わずか</span><strong id="paintLow">0</strong></article>
+          </div>
+
+          <div class="filter-bar">
+            <label class="search-box">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+              <span class="sr-only">塗料を検索</span>
+              <input type="search" id="paintSearch" placeholder="色名、メーカー、品番で検索" />
+            </label>
+            <label>
+              <span class="sr-only">塗料タイプ</span>
+              <select id="paintTypeFilter">
+                <option value="all">すべての種類</option>
+                <option>ラッカー</option><option>水性アクリル</option><option>エナメル</option>
+                <option>サーフェイサー</option><option>クリアー</option><option>その他</option>
+              </select>
+            </label>
+            <label class="check-filter"><input type="checkbox" id="lowStockOnly" /> 残量わずかのみ</label>
+          </div>
+
+          <div class="paint-list" id="paintList"></div>
+        </section>
+      </main>
+
+      <nav class="mobile-nav" aria-label="モバイルメニュー">
+        <button class="mobile-nav-button is-active" data-view="dashboard" type="button"><span class="nav-home" aria-hidden="true"></span>ホーム</button>
+        <button class="mobile-nav-button" data-view="kits" type="button"><span class="nav-box" aria-hidden="true"></span>プラモデル</button>
+        <button class="mobile-add-button" id="mobileAddButton" type="button" aria-label="新規登録">＋</button>
+        <button class="mobile-nav-button" data-view="paints" type="button"><span class="nav-drop" aria-hidden="true"></span>塗料</button>
+        <button class="mobile-nav-button" id="mobileBackupButton" type="button"><span class="nav-data" aria-hidden="true"></span>データ</button>
+      </nav>
+    </div>
+
+    <dialog class="app-dialog form-dialog" id="kitDialog" aria-labelledby="kitDialogTitle">
+      <form method="dialog" id="kitForm">
+        <div class="dialog-header">
+          <div><p class="eyebrow">MODEL KIT</p><h2 id="kitDialogTitle">プラモデルを登録</h2></div>
+          <button class="close-button" value="cancel" aria-label="閉じる" type="button" data-close-dialog>×</button>
+        </div>
+        <div class="dialog-body">
+          <input type="hidden" id="kitId" />
+          <div class="form-grid">
+            <label class="field span-2"><span>キット名 <b>必須</b></span><input id="kitName" required maxlength="100" placeholder="例：RX-78-2 ガンダム" /></label>
+            <label class="field"><span>カテゴリー</span><select id="kitCategory"></select></label>
+            <label class="field"><span>シリーズ・作品</span><input id="kitSeries" maxlength="60" placeholder="例：機動戦士ガンダム" /></label>
+            <label class="field"><span>メーカー</span><input id="kitMaker" maxlength="60" placeholder="例：BANDAI SPIRITS" /></label>
+            <label class="field"><span>スケール</span><input id="kitScale" maxlength="20" placeholder="例：1/144" /></label>
+          </div>
+
+          <fieldset class="segmented-field">
+            <legend>組立状況</legend>
+            <div class="segmented-control">
+              <label><input type="radio" name="kitStatus" value="unbuilt" checked /><span>未組立</span></label>
+              <label><input type="radio" name="kitStatus" value="built" /><span>組立済み</span></label>
+            </div>
+          </fieldset>
+
+          <div id="builtFields" class="conditional-fields" hidden>
+            <fieldset class="segmented-field">
+              <legend>仕上がり</legend>
+              <div class="segmented-control three">
+                <label><input type="radio" name="buildFinish" value="素組" checked /><span>素組</span></label>
+                <label><input type="radio" name="buildFinish" value="塗装済み" /><span>塗装済み</span></label>
+                <label><input type="radio" name="buildFinish" value="完成" /><span>完成</span></label>
+              </div>
+            </fieldset>
+            <div class="form-grid">
+              <label class="field"><span>製作開始日</span><input type="date" id="kitStartedAt" /></label>
+              <label class="field"><span>完成日</span><input type="date" id="kitCompletedAt" /></label>
+            </div>
+            <p class="duration-preview" id="durationPreview">開始日と完成日を入れると製作期間を自動計算します。</p>
+          </div>
+
+          <div class="form-section">
+            <h3>購入情報</h3>
+            <div class="form-grid">
+              <label class="field"><span>購入日</span><input type="date" id="kitPurchaseDate" /></label>
+              <label class="field"><span>購入店</span><input id="kitStore" maxlength="60" placeholder="例：ヨドバシカメラ" /></label>
+              <label class="field"><span>購入価格</span><div class="unit-input"><input type="number" id="kitPrice" min="0" max="9999999" inputmode="numeric" /><span>円</span></div></label>
+              <label class="field"><span>保管場所</span><input id="kitLocation" maxlength="60" placeholder="例：棚A・上段" /></label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>写真</h3>
+            <div class="photo-actions">
+              <button class="secondary-button" type="button" id="cameraButton">カメラで撮る</button>
+              <button class="secondary-button" type="button" id="galleryButton">端末から選ぶ</button>
+              <input class="visually-hidden-input" id="kitCameraInput" type="file" accept="image/*" capture="environment" />
+              <input class="visually-hidden-input" id="kitGalleryInput" type="file" accept="image/*" multiple />
+            </div>
+            <p class="field-hint">最大5枚。1枚目が縦長サムネイルになります。</p>
+            <div class="photo-preview-list" id="photoPreviewList"></div>
+            <label class="delete-photo-option" id="deletePhotosLabel" hidden><input type="checkbox" id="deleteExistingPhotos" /> 既存の写真をすべて削除</label>
+          </div>
+
+          <div class="form-grid">
+            <label class="field span-2"><span>タグ</span><input id="kitTags" maxlength="120" placeholder="例：宇宙世紀, 主役機, 限定品" /><small>カンマ区切り</small></label>
+            <label class="field span-2"><span>メモ</span><textarea id="kitNotes" rows="4" maxlength="600" placeholder="製作プラン、使いたい塗料、購入時のメモなど"></textarea></label>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="danger-text-button" id="deleteKitButton" type="button" hidden>削除</button>
+          <span class="footer-spacer"></span>
+          <button class="secondary-button" type="button" data-close-dialog>キャンセル</button>
+          <button class="primary-button" id="saveKitButton" type="submit">保存する</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="app-dialog form-dialog" id="paintDialog" aria-labelledby="paintDialogTitle">
+      <form method="dialog" id="paintForm">
+        <div class="dialog-header">
+          <div><p class="eyebrow">PAINT COLOR</p><h2 id="paintDialogTitle">塗料を登録</h2></div>
+          <button class="close-button" value="cancel" aria-label="閉じる" type="button" data-close-dialog>×</button>
+        </div>
+        <div class="dialog-body">
+          <input type="hidden" id="paintId" />
+          <div class="form-grid">
+            <label class="field span-2"><span>色名 <b>必須</b></span><input id="paintName" required maxlength="100" placeholder="例：ニュートラルグレー I" /></label>
+            <label class="field"><span>メーカー</span><input id="paintMaker" maxlength="60" placeholder="例：GSIクレオス" /></label>
+            <label class="field"><span>シリーズ</span><input id="paintLine" maxlength="60" placeholder="例：Mr.カラー" /></label>
+            <label class="field"><span>品番</span><input id="paintCode" maxlength="30" placeholder="例：C13" /></label>
+            <label class="field"><span>塗料の種類</span><select id="paintType"><option>ラッカー</option><option>水性アクリル</option><option>エナメル</option><option>サーフェイサー</option><option>クリアー</option><option>その他</option></select></label>
+            <label class="field"><span>色見本</span><div class="color-field"><input type="color" id="paintSwatch" value="#737a7c" /><input id="paintSwatchText" value="#737A7C" maxlength="7" pattern="#[0-9A-Fa-f]{6}" /></div></label>
+            <label class="field"><span>在庫本数</span><div class="unit-input"><input type="number" id="paintQuantity" min="0" max="99" value="1" inputmode="numeric" /><span>本</span></div></label>
+          </div>
+
+          <fieldset class="segmented-field">
+            <legend>開封状況</legend>
+            <div class="segmented-control">
+              <label><input type="radio" name="paintOpened" value="sealed" checked /><span>未開封</span></label>
+              <label><input type="radio" name="paintOpened" value="opened" /><span>開封済み</span></label>
+            </div>
+          </fieldset>
+
+          <div class="range-field" id="stockLevelField" hidden>
+            <div><span>残量</span><strong id="stockLevelOutput">100%</strong></div>
+            <input type="range" id="paintStockLevel" min="0" max="100" step="5" value="100" />
+            <div class="range-labels"><span>空</span><span>半分</span><span>満量</span></div>
+          </div>
+
+          <div class="form-section">
+            <h3>購入・保管情報</h3>
+            <div class="form-grid">
+              <label class="field"><span>購入日</span><input type="date" id="paintPurchaseDate" /></label>
+              <label class="field"><span>購入店</span><input id="paintStore" maxlength="60" placeholder="例：模型店" /></label>
+              <label class="field span-2"><span>保管場所</span><input id="paintLocation" maxlength="60" placeholder="例：塗料棚・2段目" /></label>
+            </div>
+          </div>
+          <label class="field"><span>メモ</span><textarea id="paintNotes" rows="4" maxlength="600" placeholder="希釈率、調色メモなど"></textarea></label>
+        </div>
+        <div class="dialog-footer">
+          <button class="danger-text-button" id="deletePaintButton" type="button" hidden>削除</button>
+          <span class="footer-spacer"></span>
+          <button class="secondary-button" type="button" data-close-dialog>キャンセル</button>
+          <button class="primary-button" type="submit">保存する</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="app-dialog detail-dialog" id="kitDetailDialog" aria-labelledby="detailKitName">
+      <div id="kitDetailContent"></div>
+    </dialog>
+
+    <dialog class="app-dialog action-dialog" id="addChoiceDialog" aria-labelledby="addChoiceTitle">
+      <div class="dialog-header"><div><p class="eyebrow">NEW ENTRY</p><h2 id="addChoiceTitle">何を登録しますか？</h2></div><button class="close-button" aria-label="閉じる" type="button" data-close-dialog>×</button></div>
+      <div class="choice-grid">
+        <button id="choiceAddKit" type="button"><span class="choice-art box-art" aria-hidden="true"></span><strong>プラモデル</strong><small>積みプラ・完成品を登録</small></button>
+        <button id="choiceAddPaint" type="button"><span class="choice-art paint-art" aria-hidden="true"></span><strong>塗料</strong><small>色・残量・在庫を登録</small></button>
+      </div>
+    </dialog>
+
+    <dialog class="app-dialog action-dialog" id="backupDialog" aria-labelledby="backupTitle">
+      <div class="dialog-header"><div><p class="eyebrow">DATA MANAGEMENT</p><h2 id="backupTitle">データ管理</h2></div><button class="close-button" aria-label="閉じる" type="button" data-close-dialog>×</button></div>
+      <div class="backup-grid">
+        <button id="exportButton" type="button"><strong>バックアップを書き出す</strong><small>写真を含むJSONファイルを保存</small></button>
+        <button id="importButton" type="button"><strong>バックアップから復元</strong><small>保存したJSONファイルを読み込む</small></button>
+        <input class="visually-hidden-input" type="file" id="importInput" accept="application/json,.json" />
+      </div>
+      <p class="privacy-note"><strong>データはこの端末内に保存されます。</strong> 定期的なバックアップをおすすめします。</p>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js" defer></script>
+  </body>
+</html>
