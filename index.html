@@ -195,7 +195,7 @@
     </div>
 
     <dialog class="app-dialog form-dialog" id="kitDialog" aria-labelledby="kitDialogTitle">
-      <form method="dialog" id="kitForm">
+      <form id="kitForm">
         <div class="dialog-header">
           <div><p class="eyebrow">MODEL KIT</p><h2 id="kitDialogTitle">プラモデルを登録</h2></div>
           <button class="close-button" value="cancel" aria-label="閉じる" type="button" data-close-dialog>×</button>
@@ -252,7 +252,7 @@
               <input class="visually-hidden-input" id="kitCameraInput" type="file" accept="image/*" capture="environment" />
               <input class="visually-hidden-input" id="kitGalleryInput" type="file" accept="image/*" multiple />
             </div>
-            <p class="field-hint">最大5枚。1枚目が縦長サムネイルになります。</p>
+            <p class="field-hint" id="photoProcessingStatus">最大5枚。1枚目が縦長サムネイルになります。</p>
             <div class="photo-preview-list" id="photoPreviewList"></div>
             <label class="delete-photo-option" id="deletePhotosLabel" hidden><input type="checkbox" id="deleteExistingPhotos" /> 既存の写真をすべて削除</label>
           </div>
@@ -272,7 +272,7 @@
     </dialog>
 
     <dialog class="app-dialog form-dialog" id="paintDialog" aria-labelledby="paintDialogTitle">
-      <form method="dialog" id="paintForm">
+      <form id="paintForm">
         <div class="dialog-header">
           <div><p class="eyebrow">PAINT COLOR</p><h2 id="paintDialogTitle">塗料を登録</h2></div>
           <button class="close-button" value="cancel" aria-label="閉じる" type="button" data-close-dialog>×</button>

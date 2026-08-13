@@ -4,12 +4,16 @@ const KIT_CATEGORIES = ["HG", "RG", "MG", "PG", "EG", "SD", "RE/100", "Figure-ri
 const DB_NAME = "plamo-stock-db";
 const DB_VERSION = 1;
 const LOW_STOCK_LEVEL = 25;
+const VALID_VIEWS = ["dashboard", "kits", "paints"];
 
 const state = {
   db: null,
   kits: [],
   paints: [],
+  activeView: "dashboard",
+  existingPhotos: [],
   selectedPhotos: [],
+  pendingPhotoTask: Promise.resolve(),
   objectUrls: new Set(),
   previewUrls: new Set(),
   toastTimer: null,
@@ -87,8 +91,12 @@ function dbRequest(storeName, mode, operation) {
     const transaction = state.db.transaction(storeName, mode);
     const store = transaction.objectStore(storeName);
     const request = operation(store);
-    request.onsuccess = () => resolve(request.result);
+    let result;
+    request.onsuccess = () => { result = request.result; };
     request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => resolve(result);
+    transaction.onerror = () => reject(transaction.error || request.error);
+    transaction.onabort = () => reject(transaction.error || new Error("保存処理が中断されました"));
   });
 }
 
@@ -116,7 +124,8 @@ function releaseUrls(collection) {
 function photoMarkup(kit, className = "") {
   const firstPhoto = kit.photos?.[0];
   if (!firstPhoto) return `<div class="placeholder-art ${className}" data-label="${escapeHtml(kit.category || "MODEL KIT")}"></div>`;
-  const blob = firstPhoto.blob instanceof Blob ? firstPhoto.blob : firstPhoto;
+  const blob = getPhotoBlob(firstPhoto);
+  if (!blob) return `<div class="placeholder-art ${className}" data-label="${escapeHtml(kit.category || "MODEL KIT")}"></div>`;
   return `<img class="${className}" src="${trackObjectUrl(blob)}" alt="${escapeHtml(kit.name)}の写真" />`;
 }
 
@@ -270,12 +279,36 @@ function renderPaints() {
   );
 }
 
-function setView(view, updateHash = true) {
-  if (!['dashboard', 'kits', 'paints'].includes(view)) view = "dashboard";
+function setView(view, options = {}) {
+  const { historyMode = "push", scroll = true } = options;
+  if (!VALID_VIEWS.includes(view)) view = "dashboard";
+  const changed = state.activeView !== view;
+  state.activeView = view;
+  sessionStorage.setItem("plamo-stock-active-view", view);
   $$('[data-view-panel]').forEach((panel) => panel.classList.toggle("is-active", panel.dataset.viewPanel === view));
   $$('[data-view]').forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
-  if (updateHash && location.hash !== `#${view}`) history.replaceState(null, "", `#${view}`);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  const nextState = { view };
+  if (historyMode === "push" && (location.hash !== `#${view}` || history.state?.dialog)) history.pushState(nextState, "", `#${view}`);
+  if (historyMode === "replace") history.replaceState(nextState, "", `#${view}`);
+  if (scroll && changed) window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function openTrackedDialog(dialog, replaceCurrentDialog = false) {
+  if (!dialog.open) dialog.showModal();
+  const nextState = { view: state.activeView, dialog: dialog.id };
+  if (replaceCurrentDialog && history.state?.dialog) history.replaceState(nextState, "", `#${state.activeView}`);
+  else history.pushState(nextState, "", `#${state.activeView}`);
+}
+
+function dismissDialog(dialog) {
+  if (dialog.open) dialog.close();
+  if (history.state?.dialog === dialog.id) history.back();
+}
+
+function finishDialog(dialog, targetView) {
+  if (dialog.open) dialog.close();
+  history.replaceState({ view: targetView }, "", `#${targetView}`);
+  setView(targetView, { historyMode: "none" });
 }
 
 function populateCategorySelect() {
@@ -293,14 +326,32 @@ function setRadio(name, value) {
 
 function resetPhotoSelection() {
   releaseUrls(state.previewUrls);
+  state.existingPhotos = [];
   state.selectedPhotos = [];
+  state.pendingPhotoTask = Promise.resolve();
   $("#kitCameraInput").value = "";
   $("#kitGalleryInput").value = "";
   $("#photoPreviewList").innerHTML = "";
   $("#deleteExistingPhotos").checked = false;
+  setPhotoProcessing(false);
 }
 
-function openKitForm(id = null) {
+function getPhotoBlob(photo) {
+  const blob = photo?.blob ?? photo;
+  const isBlobLike = blob && typeof blob.size === "number" && typeof blob.type === "string";
+  return blob instanceof Blob || isBlobLike ? blob : null;
+}
+
+function setPhotoProcessing(processing) {
+  $("#saveKitButton").disabled = processing;
+  $("#cameraButton").disabled = processing;
+  $("#galleryButton").disabled = processing;
+  const status = $("#photoProcessingStatus");
+  status.classList.toggle("is-processing", processing);
+  status.textContent = processing ? "写真を処理しています。完了するまでお待ちください。" : "最大5枚。1枚目が縦長サムネイルになります。";
+}
+
+function openKitForm(id = null, replaceCurrentDialog = false) {
   const form = $("#kitForm");
   form.reset();
   resetPhotoSelection();
@@ -332,10 +383,12 @@ function openKitForm(id = null) {
     $("#kitDialogTitle").textContent = "プラモデルを編集";
     $("#deleteKitButton").hidden = false;
     $("#deletePhotosLabel").hidden = !(kit.photos?.length);
+    state.existingPhotos = [...(kit.photos || [])];
   }
+  renderSelectedPhotoPreviews();
   updateBuiltFields();
   updateDurationPreview();
-  $("#kitDialog").showModal();
+  openTrackedDialog($("#kitDialog"), replaceCurrentDialog);
   requestAnimationFrame(() => $("#kitName").focus());
 }
 
@@ -358,18 +411,26 @@ async function imageToBlob(file) {
   let sourceWidth;
   let sourceHeight;
   if ("createImageBitmap" in window) {
-    source = await createImageBitmap(file);
-    sourceWidth = source.width;
-    sourceHeight = source.height;
-  } else {
+    try {
+      source = await createImageBitmap(file, { imageOrientation: "from-image" });
+      sourceWidth = source.width;
+      sourceHeight = source.height;
+    } catch (error) {
+      console.warn("createImageBitmap failed. Falling back to Image.", error);
+    }
+  }
+  if (!source) {
     const url = URL.createObjectURL(file);
-    source = await new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = reject;
-      image.src = url;
-    });
-    URL.revokeObjectURL(url);
+    try {
+      source = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = url;
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
     sourceWidth = source.naturalWidth;
     sourceHeight = source.naturalHeight;
   }
@@ -387,46 +448,71 @@ async function imageToBlob(file) {
 }
 
 async function addSelectedPhotos(files) {
-  const editingKit = state.kits.find((kit) => kit.id === $("#kitId").value);
-  const existingCount = $("#deleteExistingPhotos").checked ? 0 : (editingKit?.photos?.length || 0);
+  const existingCount = $("#deleteExistingPhotos").checked ? 0 : state.existingPhotos.length;
   const available = Math.max(0, 5 - existingCount - state.selectedPhotos.length);
   const chosen = [...files].slice(0, available);
   if (!chosen.length) {
     showToast("写真は最大5枚まで登録できます");
     return;
   }
-  try {
-    for (const file of chosen) {
-      const blob = await imageToBlob(file);
-      state.selectedPhotos.push({ blob, name: file.name || "photo.jpg", type: "image/jpeg" });
+  const processFiles = async () => {
+    setPhotoProcessing(true);
+    try {
+      for (const file of chosen) {
+        let blob;
+        try {
+          blob = await imageToBlob(file);
+        } catch (error) {
+          console.warn("Image conversion failed. Preserving original file.", error);
+          blob = file;
+        }
+        state.selectedPhotos.push({ blob, name: file.name || "photo.jpg", type: blob.type || file.type || "image/jpeg" });
+      }
+      if (files.length > chosen.length) showToast("最大5枚まで追加しました");
+      renderSelectedPhotoPreviews();
+    } catch (error) {
+      console.error(error);
+      showToast("写真を読み込めませんでした。別の画像を選んでください");
+    } finally {
+      setPhotoProcessing(false);
     }
-    if (files.length > chosen.length) showToast("最大5枚まで追加しました");
-    renderSelectedPhotoPreviews();
-  } catch (error) {
-    console.error(error);
-    showToast("写真を読み込めませんでした。別の画像を選んでください");
-  }
+  };
+  state.pendingPhotoTask = state.pendingPhotoTask.then(processFiles, processFiles);
+  await state.pendingPhotoTask;
 }
 
 function renderSelectedPhotoPreviews() {
   releaseUrls(state.previewUrls);
-  $("#photoPreviewList").innerHTML = state.selectedPhotos.map((photo, index) => `
+  const existing = $("#deleteExistingPhotos").checked ? [] : state.existingPhotos;
+  const existingMarkup = existing.map((photo, index) => {
+    const blob = getPhotoBlob(photo);
+    if (!blob) return "";
+    return `
+    <div class="photo-preview-item">
+      <img src="${trackObjectUrl(blob, true)}" alt="登録済み写真 ${index + 1}" />
+      <button type="button" data-remove-existing-photo="${index}" aria-label="登録済み写真${index + 1}を削除">×</button>
+    </div>`;
+  }).join("");
+  const selectedMarkup = state.selectedPhotos.map((photo, index) => `
     <div class="photo-preview-item">
       <img src="${trackObjectUrl(photo.blob, true)}" alt="追加する写真 ${index + 1}" />
       <button type="button" data-remove-photo="${index}" aria-label="写真${index + 1}を外す">×</button>
     </div>`).join("");
+  $("#photoPreviewList").innerHTML = existingMarkup + selectedMarkup;
 }
 
 async function saveKit(event) {
   event.preventDefault();
-  if (!event.currentTarget.reportValidity()) return;
+  const form = event.currentTarget;
+  await state.pendingPhotoTask;
+  if (!form.reportValidity()) return;
   const editing = state.kits.find((kit) => kit.id === $("#kitId").value);
   const name = $("#kitName").value.trim();
   const category = $("#kitCategory").value;
   const duplicate = state.kits.find((kit) => kit.id !== editing?.id && kit.name.trim().toLocaleLowerCase("ja") === name.toLocaleLowerCase("ja") && kit.category === category);
   if (duplicate && !confirm(`「${duplicate.name}」は同じカテゴリーですでに登録されています。追加しますか？`)) return;
 
-  let photos = editing?.photos || [];
+  let photos = state.existingPhotos;
   if ($("#deleteExistingPhotos").checked) photos = [];
   photos = [...photos, ...state.selectedPhotos].slice(0, 5);
   const status = selectedRadio("kitStatus");
@@ -452,24 +538,29 @@ async function saveKit(event) {
     createdAt: editing?.createdAt || now,
     updatedAt: now,
   };
-  await putRecord("kits", record);
-  $("#kitDialog").close();
-  resetPhotoSelection();
-  await refreshState();
-  showToast(editing ? "プラモデルを更新しました" : "プラモデルを登録しました");
+  try {
+    await putRecord("kits", record);
+    finishDialog($("#kitDialog"), "kits");
+    resetPhotoSelection();
+    await refreshState();
+    showToast(editing ? "プラモデルを更新しました" : "プラモデルを登録しました");
+  } catch (error) {
+    console.error(error);
+    showToast("保存できませんでした。写真枚数を減らして再度お試しください");
+  }
 }
 
 async function removeKit(id) {
   const kit = state.kits.find((item) => item.id === id);
   if (!kit || !confirm(`「${kit.name}」を削除しますか？`)) return;
   await deleteRecord("kits", id);
-  $("#kitDialog").close();
-  $("#kitDetailDialog").open && $("#kitDetailDialog").close();
+  finishDialog($("#kitDialog"), "kits");
+  if ($("#kitDetailDialog").open) $("#kitDetailDialog").close();
   await refreshState();
   showToast("プラモデルを削除しました");
 }
 
-function openPaintForm(id = null) {
+function openPaintForm(id = null, replaceCurrentDialog = false) {
   const form = $("#paintForm");
   form.reset();
   $("#paintId").value = "";
@@ -500,7 +591,7 @@ function openPaintForm(id = null) {
   }
   updatePaintOpenedFields();
   updateStockOutput();
-  $("#paintDialog").showModal();
+  openTrackedDialog($("#paintDialog"), replaceCurrentDialog);
   requestAnimationFrame(() => $("#paintName").focus());
 }
 
@@ -536,17 +627,22 @@ async function savePaint(event) {
     createdAt: editing?.createdAt || now,
     updatedAt: now,
   };
-  await putRecord("paints", record);
-  $("#paintDialog").close();
-  await refreshState();
-  showToast(editing ? "塗料を更新しました" : "塗料を登録しました");
+  try {
+    await putRecord("paints", record);
+    finishDialog($("#paintDialog"), "paints");
+    await refreshState();
+    showToast(editing ? "塗料を更新しました" : "塗料を登録しました");
+  } catch (error) {
+    console.error(error);
+    showToast("塗料を保存できませんでした");
+  }
 }
 
 async function removePaint(id) {
   const paint = state.paints.find((item) => item.id === id);
   if (!paint || !confirm(`「${paint.name}」を削除しますか？`)) return;
   await deleteRecord("paints", id);
-  $("#paintDialog").close();
+  finishDialog($("#paintDialog"), "paints");
   await refreshState();
   showToast("塗料を削除しました");
 }
@@ -554,7 +650,7 @@ async function removePaint(id) {
 function showKitDetail(id) {
   const kit = state.kits.find((item) => item.id === id);
   if (!kit) return;
-  const photos = (kit.photos || []).map((photo) => photo.blob instanceof Blob ? photo.blob : photo);
+  const photos = (kit.photos || []).map(getPhotoBlob).filter(Boolean);
   const photoUrls = photos.map((photo) => trackObjectUrl(photo));
   const mainPhoto = photoUrls[0]
     ? `<img class="detail-main-photo" id="detailMainPhoto" src="${photoUrls[0]}" alt="${escapeHtml(kit.name)}の写真" />`
@@ -587,7 +683,7 @@ function showKitDetail(id) {
         <div class="detail-copy-footer"><button class="secondary-button" type="button" data-edit-detail-kit="${escapeHtml(kit.id)}">編集する</button></div>
       </div>
     </div>`;
-  $("#kitDetailDialog").showModal();
+  openTrackedDialog($("#kitDetailDialog"));
 }
 
 function blobToDataUrl(blob) {
@@ -643,7 +739,7 @@ async function importBackup(file) {
     await Promise.all([clearStore("kits"), clearStore("paints")]);
     for (const kit of restoredKits) await putRecord("kits", kit);
     for (const paint of payload.paints) await putRecord("paints", paint);
-    $("#backupDialog").close();
+    finishDialog($("#backupDialog"), state.activeView);
     await refreshState();
     showToast("バックアップから復元しました");
   } catch (error) {
@@ -654,29 +750,40 @@ async function importBackup(file) {
   }
 }
 
-function openAddChoice() { $("#addChoiceDialog").showModal(); }
-function openBackup() { $("#backupDialog").showModal(); }
+function openAddChoice() { openTrackedDialog($("#addChoiceDialog")); }
+function openBackup() { openTrackedDialog($("#backupDialog")); }
 
 function bindEvents() {
   $$('[data-view]').forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   $$('[data-go-view]').forEach((button) => button.addEventListener("click", () => setView(button.dataset.goView)));
-  window.addEventListener("hashchange", () => setView(location.hash.slice(1), false));
+  window.addEventListener("popstate", (event) => {
+    const openDialog = $$('dialog[open]').at(-1);
+    if (openDialog) openDialog.close();
+    const view = event.state?.view || location.hash.slice(1) || sessionStorage.getItem("plamo-stock-active-view") || "dashboard";
+    setView(view, { historyMode: "none", scroll: false });
+  });
   $("#quickAddButton").addEventListener("click", openAddChoice);
   $("#mobileAddButton").addEventListener("click", openAddChoice);
   $("#heroAddKit").addEventListener("click", () => openKitForm());
   $("#heroAddPaint").addEventListener("click", () => openPaintForm());
   $("#addKitButton").addEventListener("click", () => openKitForm());
   $("#addPaintButton").addEventListener("click", () => openPaintForm());
-  $("#choiceAddKit").addEventListener("click", () => { $("#addChoiceDialog").close(); openKitForm(); });
-  $("#choiceAddPaint").addEventListener("click", () => { $("#addChoiceDialog").close(); openPaintForm(); });
+  $("#choiceAddKit").addEventListener("click", () => { $("#addChoiceDialog").close(); openKitForm(null, true); });
+  $("#choiceAddPaint").addEventListener("click", () => { $("#addChoiceDialog").close(); openPaintForm(null, true); });
   $("#backupButton").addEventListener("click", openBackup);
   $("#mobileBackupButton").addEventListener("click", openBackup);
 
-  $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
-  $$('dialog').forEach((dialog) => dialog.addEventListener("click", (event) => {
-    const rect = dialog.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
-  }));
+  $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => dismissDialog(button.closest("dialog"))));
+  $$('dialog').forEach((dialog) => {
+    dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      dismissDialog(dialog);
+    });
+    dialog.addEventListener("click", (event) => {
+      const rect = dialog.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dismissDialog(dialog);
+    });
+  });
 
   $$('input[name="kitStatus"]').forEach((input) => input.addEventListener("change", updateBuiltFields));
   $("#kitStartedAt").addEventListener("change", updateDurationPreview);
@@ -688,11 +795,19 @@ function bindEvents() {
   $("#kitCameraInput").addEventListener("change", (event) => addSelectedPhotos(event.target.files));
   $("#kitGalleryInput").addEventListener("change", (event) => addSelectedPhotos(event.target.files));
   $("#photoPreviewList").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-remove-photo]");
-    if (!button) return;
-    state.selectedPhotos.splice(Number(button.dataset.removePhoto), 1);
+    const addedButton = event.target.closest("[data-remove-photo]");
+    const existingButton = event.target.closest("[data-remove-existing-photo]");
+    if (!addedButton && !existingButton) return;
+    if (addedButton) state.selectedPhotos.splice(Number(addedButton.dataset.removePhoto), 1);
+    if (existingButton) state.existingPhotos.splice(Number(existingButton.dataset.removeExistingPhoto), 1);
     renderSelectedPhotoPreviews();
   });
+  $("#deleteExistingPhotos").addEventListener("change", renderSelectedPhotoPreviews);
+
+  [$("#kitForm"), $("#paintForm")].forEach((form) => form.addEventListener("keydown", (event) => {
+    const blocksImplicitSubmit = event.target.tagName === "INPUT" && ["text", "search", "number"].includes(event.target.type);
+    if (event.key === "Enter" && blocksImplicitSubmit) event.preventDefault();
+  }));
 
   $$('input[name="paintOpened"]').forEach((input) => input.addEventListener("change", updatePaintOpenedFields));
   $("#paintStockLevel").addEventListener("input", updateStockOutput);
@@ -720,7 +835,7 @@ function bindEvents() {
       $$('[data-detail-photo]').forEach((button) => button.classList.toggle("is-active", button === detailPhoto));
     }
     const editKit = event.target.closest("[data-edit-detail-kit]");
-    if (editKit) { $("#kitDetailDialog").close(); openKitForm(editKit.dataset.editDetailKit); }
+    if (editKit) { $("#kitDetailDialog").close(); openKitForm(editKit.dataset.editDetailKit, true); }
   });
 
   $("#exportButton").addEventListener("click", exportBackup);
@@ -731,7 +846,11 @@ function bindEvents() {
 async function init() {
   populateCategorySelect();
   bindEvents();
-  setView(location.hash.slice(1) || "dashboard", false);
+  const requestedView = location.hash.slice(1);
+  const savedView = sessionStorage.getItem("plamo-stock-active-view");
+  const initialView = VALID_VIEWS.includes(requestedView) ? requestedView : (VALID_VIEWS.includes(savedView) ? savedView : "dashboard");
+  history.replaceState({ view: initialView }, "", `#${initialView}`);
+  setView(initialView, { historyMode: "none", scroll: false });
   try {
     state.db = await openDatabase();
     await refreshState();

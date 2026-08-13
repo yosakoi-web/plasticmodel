@@ -440,13 +440,14 @@ h1, h2, p { margin-top: 0; }
 .dialog-footer { display: flex; flex: 0 0 auto; align-items: center; gap: 9px; padding: 15px 24px; border-top: 1px solid var(--line); background: #f0eee7; }
 .footer-spacer { flex: 1; }
 
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.field { display: grid; align-content: start; gap: 7px; }
+.form-grid { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.field { display: grid; min-width: 0; max-width: 100%; align-content: start; gap: 7px; }
 .field.span-2 { grid-column: span 2; }
 .field > span, .segmented-field legend, .range-field > div:first-child span { color: #50544d; font-size: 11px; font-weight: 800; }
 .field b { margin-left: 5px; color: var(--accent); font-size: 9px; }
-.field input, .field select, .field textarea, .unit-input, .color-field { width: 100%; border: 1px solid #cbc9c1; border-radius: 5px; background: #fff; }
+.field input, .field select, .field textarea, .unit-input, .color-field { width: 100%; min-width: 0; max-width: 100%; border: 1px solid #cbc9c1; border-radius: 5px; background: #fff; }
 .field input, .field select { min-height: 43px; padding: 0 12px; }
+.field input[type="date"] { display: block; min-width: 0; max-width: 100%; }
 .field textarea { min-height: 90px; padding: 11px 12px; resize: vertical; }
 .field small, .field-hint { margin: 0; color: #898c85; font-size: 9px; }
 .form-section { margin: 23px 0; padding-top: 20px; border-top: 1px solid var(--line); }
@@ -472,6 +473,7 @@ h1, h2, p { margin-top: 0; }
 .photo-preview-item img { width: 100%; height: 100%; object-fit: cover; }
 .photo-preview-item button { position: absolute; top: 4px; right: 4px; display: grid; width: 22px; height: 22px; place-items: center; border: 0; border-radius: 50%; color: #fff; background: rgba(0,0,0,0.72); }
 .delete-photo-option { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--danger); font-size: 10px; }
+.field-hint.is-processing { color: var(--accent); font-weight: 800; }
 .range-field { margin-top: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .range-field > div:first-child, .range-labels { display: flex; justify-content: space-between; }
 .range-field input { width: 100%; margin: 14px 0 3px; accent-color: var(--accent); }
@@ -596,6 +598,7 @@ h1, h2, p { margin-top: 0; }
   .dialog-footer { padding: 12px 18px; }
   .form-grid { grid-template-columns: 1fr; }
   .field.span-2 { grid-column: span 1; }
+  .field input[type="date"] { width: 100%; min-width: 0; max-width: calc(100vw - 54px); appearance: none; -webkit-appearance: none; }
   .dialog-footer .secondary-button { display: none; }
   .detail-dialog { width: calc(100vw - 16px); }
   .detail-layout { display: block; min-height: 0; max-height: calc(100dvh - 16px); overflow-y: auto; }
