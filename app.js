@@ -76,6 +76,33 @@ function showToast(message) {
   state.toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 2800);
 }
 
+let confirmResolver = null;
+
+function settleConfirm(result) {
+  const dialog = $("#confirmDialog");
+  if (dialog.open) dialog.close();
+  const resolve = confirmResolver;
+  confirmResolver = null;
+  if (resolve) resolve(result);
+}
+
+function confirmAction(message, options = {}) {
+  const { title = "確認", confirmText = "実行する" } = options;
+  const dialog = $("#confirmDialog");
+  $("#confirmDialogTitle").textContent = title;
+  $("#confirmDialogMessage").textContent = message;
+  $("#confirmDialogConfirm").textContent = confirmText;
+  if (confirmResolver) {
+    const resolve = confirmResolver;
+    confirmResolver = null;
+    resolve(false);
+  }
+  return new Promise((resolve) => {
+    confirmResolver = resolve;
+    if (!dialog.open) dialog.showModal();
+  });
+}
+
 function openDatabase() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -357,8 +384,7 @@ function openFormScreen(screen) {
   persistFormDraft();
 }
 
-function closeFormScreen(screen, force = false) {
-  if (!force && state.formDirty && !confirm("入力内容は保存されていません。入力をキャンセルしますか？")) return false;
+function closeFormScreen(screen) {
   screen.hidden = true;
   document.body.classList.remove("form-open");
   state.activeForm = null;
@@ -368,8 +394,19 @@ function closeFormScreen(screen, force = false) {
   return true;
 }
 
+async function requestCloseForm(screen) {
+  if (state.formDirty) {
+    const shouldClose = await confirmAction(
+      "入力内容は保存されていません。入力を破棄しますか？",
+      { title: "入力を破棄しますか？", confirmText: "破棄する" }
+    );
+    if (!shouldClose) return false;
+  }
+  return closeFormScreen(screen);
+}
+
 function finishForm(screen, targetView) {
-  closeFormScreen(screen, true);
+  closeFormScreen(screen);
   setView(targetView, { historyMode: "replace" });
 }
 
@@ -581,7 +618,13 @@ async function saveKit() {
   const name = $("#kitName").value.trim();
   const category = $("#kitCategory").value;
   const duplicate = state.kits.find((kit) => kit.id !== editing?.id && kit.name.trim().toLocaleLowerCase("ja") === name.toLocaleLowerCase("ja") && kit.category === category);
-  if (duplicate && !confirm(`「${duplicate.name}」は同じカテゴリーですでに登録されています。追加しますか？`)) return;
+  if (duplicate) {
+    const shouldAdd = await confirmAction(
+      `「${duplicate.name}」は同じカテゴリーですでに登録されています。追加しますか？`,
+      { title: "重複するプラモデルがあります", confirmText: "追加する" }
+    );
+    if (!shouldAdd) return;
+  }
 
   let photos = state.existingPhotos;
   if ($("#deleteExistingPhotos").checked) photos = [];
@@ -622,12 +665,22 @@ async function saveKit() {
 
 async function removeKit(id) {
   const kit = state.kits.find((item) => item.id === id);
-  if (!kit || !confirm(`「${kit.name}」を削除しますか？`)) return;
-  await deleteRecord("kits", id);
-  finishForm($("#kitDialog"), "kits");
-  if ($("#kitDetailDialog").open) $("#kitDetailDialog").close();
-  await refreshState();
-  showToast("プラモデルを削除しました");
+  if (!kit) return;
+  const shouldDelete = await confirmAction(
+    `「${kit.name}」を削除しますか？`,
+    { title: "プラモデルを削除しますか？", confirmText: "削除する" }
+  );
+  if (!shouldDelete) return;
+  try {
+    await deleteRecord("kits", id);
+    finishForm($("#kitDialog"), "kits");
+    if ($("#kitDetailDialog").open) $("#kitDetailDialog").close();
+    await refreshState();
+    showToast("プラモデルを削除しました");
+  } catch (error) {
+    console.error(error);
+    showToast("プラモデルを削除できませんでした");
+  }
 }
 
 function openPaintForm(id = null) {
@@ -711,11 +764,21 @@ async function savePaint() {
 
 async function removePaint(id) {
   const paint = state.paints.find((item) => item.id === id);
-  if (!paint || !confirm(`「${paint.name}」を削除しますか？`)) return;
-  await deleteRecord("paints", id);
-  finishForm($("#paintDialog"), "paints");
-  await refreshState();
-  showToast("塗料を削除しました");
+  if (!paint) return;
+  const shouldDelete = await confirmAction(
+    `「${paint.name}」を削除しますか？`,
+    { title: "塗料を削除しますか？", confirmText: "削除する" }
+  );
+  if (!shouldDelete) return;
+  try {
+    await deleteRecord("paints", id);
+    finishForm($("#paintDialog"), "paints");
+    await refreshState();
+    showToast("塗料を削除しました");
+  } catch (error) {
+    console.error(error);
+    showToast("塗料を削除できませんでした");
+  }
 }
 
 function showKitDetail(id) {
@@ -797,7 +860,11 @@ async function importBackup(file) {
   try {
     const payload = JSON.parse(await file.text());
     if (payload.app !== "PLAMO STOCK" || !Array.isArray(payload.kits) || !Array.isArray(payload.paints)) throw new Error("invalid");
-    if (!confirm(`現在のデータを置き換え、プラモデル${payload.kits.length}件・塗料${payload.paints.length}色を復元しますか？`)) return;
+    const shouldImport = await confirmAction(
+      `現在のデータを置き換え、プラモデル${payload.kits.length}件・塗料${payload.paints.length}色を復元しますか？`,
+      { title: "バックアップから復元しますか？", confirmText: "復元する" }
+    );
+    if (!shouldImport) return;
     const restoredKits = [];
     for (const kit of payload.kits) {
       const photos = [];
@@ -882,9 +949,8 @@ function bindEvents() {
   $("#backupButton").addEventListener("click", openBackup);
   $("#mobileBackupButton").addEventListener("click", openBackup);
 
-  $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => dismissDialog(button.closest("dialog"))));
-  $$('[data-close-form]').forEach((button) => button.addEventListener("click", () => closeFormScreen(button.closest(".form-screen"))));
-  $$('dialog').forEach((dialog) => {
+  $$('[data-close-form]').forEach((button) => button.addEventListener("click", () => requestCloseForm(button.closest(".form-screen"))));
+  $$('dialog:not(#confirmDialog)').forEach((dialog) => {
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
       dismissDialog(dialog);
@@ -893,6 +959,13 @@ function bindEvents() {
       const rect = dialog.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dismissDialog(dialog);
     });
+  });
+
+  $("#confirmDialogCancel").addEventListener("click", () => settleConfirm(false));
+  $("#confirmDialogConfirm").addEventListener("click", () => settleConfirm(true));
+  $("#confirmDialog").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    settleConfirm(false);
   });
 
   $$('input[name="kitStatus"]').forEach((input) => input.addEventListener("change", updateBuiltFields));
@@ -950,6 +1023,13 @@ function bindEvents() {
   [$("#paintSearch"), $("#paintTypeFilter"), $("#lowStockOnly")].forEach((input) => input.addEventListener("input", renderPaints));
 
   document.addEventListener("click", (event) => {
+    const closeDialogButton = event.target.closest("[data-close-dialog]");
+    if (closeDialogButton) {
+      const dialog = closeDialogButton.closest("dialog");
+      if (dialog) dismissDialog(dialog);
+      return;
+    }
+
     const kitButton = event.target.closest("[data-kit-detail]");
     if (kitButton) showKitDetail(kitButton.dataset.kitDetail);
     const editPaintButton = event.target.closest("[data-edit-paint]");

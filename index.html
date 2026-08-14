@@ -344,6 +344,21 @@
       <p class="privacy-note"><strong>データはこの端末内に保存されます。</strong> 定期的なバックアップをおすすめします。</p>
     </dialog>
 
+
+    <dialog class="app-dialog confirm-dialog" id="confirmDialog" aria-labelledby="confirmDialogTitle">
+      <div class="dialog-header">
+        <div><p class="eyebrow">CONFIRM</p><h2 id="confirmDialogTitle">確認</h2></div>
+      </div>
+      <div class="confirm-dialog-body">
+        <p id="confirmDialogMessage"></p>
+      </div>
+      <div class="dialog-footer">
+        <span class="footer-spacer"></span>
+        <button class="secondary-button" id="confirmDialogCancel" type="button">キャンセル</button>
+        <button class="danger-button" id="confirmDialogConfirm" type="button">実行する</button>
+      </div>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="./app.js" defer></script>
   </body>

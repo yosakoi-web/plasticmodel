@@ -543,6 +543,22 @@ h1, h2, p { margin-top: 0; }
 .range-field input { width: 100%; margin: 14px 0 3px; accent-color: var(--accent); }
 .range-labels { color: var(--muted); font-size: 9px; }
 
+
+.danger-button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  color: #fff;
+  background: var(--danger);
+  font-weight: 800;
+}
+.danger-button:hover { filter: brightness(0.92); }
+.confirm-dialog { width: min(520px, calc(100vw - 28px)); }
+.confirm-dialog-body { padding: 24px; }
+.confirm-dialog-body p { margin: 0; line-height: 1.7; }
+.confirm-dialog .dialog-footer .secondary-button { display: inline-flex; }
+
 .detail-dialog { width: min(980px, calc(100vw - 28px)); }
 .detail-layout { display: grid; grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr); min-height: 560px; }
 .detail-gallery { position: relative; display: grid; min-height: 560px; background: #20241f; }
