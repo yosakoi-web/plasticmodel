@@ -37,6 +37,8 @@ body {
 
 button, input, select, textarea { font: inherit; }
 button { color: inherit; }
+[hidden] { display: none !important; }
+body.form-open { overflow: hidden; }
 button, select, input[type="checkbox"], input[type="radio"], input[type="range"] { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
@@ -432,7 +434,34 @@ h1, h2, p { margin-top: 0; }
   box-shadow: 0 30px 80px rgba(13,15,12,0.36);
 }
 .app-dialog::backdrop { background: rgba(14, 16, 13, 0.68); backdrop-filter: blur(3px); }
-.form-dialog form { display: flex; max-height: min(880px, calc(100vh - 32px)); flex-direction: column; }
+.form-screen {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  place-items: center;
+  background: rgba(14, 16, 13, 0.72);
+  backdrop-filter: blur(3px);
+}
+.form-screen form {
+  display: flex;
+  width: min(760px, 100%);
+  max-width: 100%;
+  height: min(880px, calc(100dvh - 24px));
+  max-height: 100%;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cac8c0;
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 30px 80px rgba(13,15,12,0.36);
+}
 .dialog-header { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 22px 24px 18px; border-bottom: 1px solid var(--line); }
 .dialog-header h2 { margin: 0; font-size: 32px; line-height: 1; }
 .close-button { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: transparent; font-size: 23px; line-height: 1; }
@@ -447,7 +476,42 @@ h1, h2, p { margin-top: 0; }
 .field b { margin-left: 5px; color: var(--accent); font-size: 9px; }
 .field input, .field select, .field textarea, .unit-input, .color-field { width: 100%; min-width: 0; max-width: 100%; border: 1px solid #cbc9c1; border-radius: 5px; background: #fff; }
 .field input, .field select { min-height: 43px; padding: 0 12px; }
-.field input[type="date"] { display: block; min-width: 0; max-width: 100%; }
+.date-field { min-width: 0; max-width: 100%; overflow: hidden; }
+.date-control {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 43px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid #cbc9c1;
+  border-radius: 5px;
+  background: #fff;
+}
+.date-control:focus-within { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+.field .date-control input[type="date"] {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+}
+.date-value { min-width: 0; flex: 1; overflow: hidden; color: #777b73; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.date-value.has-value { color: var(--ink); }
+.date-icon { position: relative; flex: 0 0 18px; width: 18px; height: 17px; border: 2px solid #777b73; border-radius: 2px; }
+.date-icon::before { position: absolute; top: 3px; right: 0; left: 0; border-top: 2px solid #777b73; content: ""; }
+.date-icon::after { position: absolute; top: -4px; left: 3px; width: 8px; height: 4px; border-right: 2px solid #777b73; border-left: 2px solid #777b73; content: ""; }
 .field textarea { min-height: 90px; padding: 11px 12px; resize: vertical; }
 .field small, .field-hint { margin: 0; color: #898c85; font-size: 9px; }
 .form-section { margin: 23px 0; padding-top: 20px; border-top: 1px solid var(--line); }
@@ -591,14 +655,16 @@ h1, h2, p { margin-top: 0; }
   .nav-drop { border-radius: 50% 50% 50% 5px; transform: rotate(45deg) scale(0.72); }
   .nav-data { border-radius: 50%; transform: scale(0.72); }
   .mobile-add-button { align-self: start; justify-self: center; display: grid; width: 48px; height: 48px; margin-top: -17px; place-items: center; border: 4px solid var(--dark); border-radius: 50%; color: #fff; background: var(--accent); font-size: 25px; }
-  .app-dialog, .form-dialog form { max-height: calc(100dvh - 16px); }
+  .app-dialog { max-height: calc(100dvh - 16px); }
   .app-dialog { width: calc(100vw - 16px); }
+  .form-screen { padding: 0; background: var(--surface); backdrop-filter: none; }
+  .form-screen form { width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; box-shadow: none; }
   .dialog-header { padding: 18px; }
   .dialog-body { padding: 18px; }
   .dialog-footer { padding: 12px 18px; }
   .form-grid { grid-template-columns: 1fr; }
   .field.span-2 { grid-column: span 1; }
-  .field input[type="date"] { width: 100%; min-width: 0; max-width: calc(100vw - 54px); appearance: none; -webkit-appearance: none; }
+  .date-control { width: 100%; min-width: 0; max-width: 100%; }
   .dialog-footer .secondary-button { display: none; }
   .detail-dialog { width: calc(100vw - 16px); }
   .detail-layout { display: block; min-height: 0; max-height: calc(100dvh - 16px); overflow-y: auto; }

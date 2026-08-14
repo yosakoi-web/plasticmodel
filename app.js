@@ -5,12 +5,15 @@ const DB_NAME = "plamo-stock-db";
 const DB_VERSION = 1;
 const LOW_STOCK_LEVEL = 25;
 const VALID_VIEWS = ["dashboard", "kits", "paints"];
+const FORM_DRAFT_KEY = "plamo-stock-open-form-v1";
 
 const state = {
   db: null,
   kits: [],
   paints: [],
   activeView: "dashboard",
+  activeForm: null,
+  formDirty: false,
   existingPhotos: [],
   selectedPhotos: [],
   pendingPhotoTask: Promise.resolve(),
@@ -311,6 +314,65 @@ function finishDialog(dialog, targetView) {
   setView(targetView, { historyMode: "none" });
 }
 
+function formValues(form) {
+  const values = {};
+  $$('input, select, textarea', form).forEach((field) => {
+    if (field.type === "file" || field.type === "submit" || field.type === "button") return;
+    const key = field.name || field.id;
+    if (!key) return;
+    if (field.type === "radio") {
+      if (field.checked) values[key] = field.value;
+    } else if (field.type === "checkbox") values[key] = field.checked;
+    else values[key] = field.value;
+  });
+  return values;
+}
+
+function applyFormValues(form, values = {}) {
+  $$('input, select, textarea', form).forEach((field) => {
+    const key = field.name || field.id;
+    if (!key || !(key in values) || field.type === "file") return;
+    if (field.type === "radio") field.checked = values[key] === field.value;
+    else if (field.type === "checkbox") field.checked = Boolean(values[key]);
+    else field.value = values[key];
+  });
+}
+
+function persistFormDraft() {
+  if (!state.activeForm || state.activeForm.hidden) return;
+  const form = $('form', state.activeForm);
+  sessionStorage.setItem(FORM_DRAFT_KEY, JSON.stringify({
+    screenId: state.activeForm.id,
+    view: state.activeView,
+    recordId: state.activeForm.id === "kitDialog" ? $("#kitId").value : $("#paintId").value,
+    values: formValues(form),
+  }));
+}
+
+function openFormScreen(screen) {
+  state.activeForm = screen;
+  state.formDirty = false;
+  screen.hidden = false;
+  document.body.classList.add("form-open");
+  persistFormDraft();
+}
+
+function closeFormScreen(screen, force = false) {
+  if (!force && state.formDirty && !confirm("入力内容は保存されていません。入力をキャンセルしますか？")) return false;
+  screen.hidden = true;
+  document.body.classList.remove("form-open");
+  state.activeForm = null;
+  state.formDirty = false;
+  sessionStorage.removeItem(FORM_DRAFT_KEY);
+  if (screen.id === "kitDialog") resetPhotoSelection();
+  return true;
+}
+
+function finishForm(screen, targetView) {
+  closeFormScreen(screen, true);
+  setView(targetView, { historyMode: "replace" });
+}
+
 function populateCategorySelect() {
   $("#kitCategory").innerHTML = KIT_CATEGORIES.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
 }
@@ -351,7 +413,7 @@ function setPhotoProcessing(processing) {
   status.textContent = processing ? "写真を処理しています。完了するまでお待ちください。" : "最大5枚。1枚目が縦長サムネイルになります。";
 }
 
-function openKitForm(id = null, replaceCurrentDialog = false) {
+function openKitForm(id = null) {
   const form = $("#kitForm");
   form.reset();
   resetPhotoSelection();
@@ -388,7 +450,8 @@ function openKitForm(id = null, replaceCurrentDialog = false) {
   renderSelectedPhotoPreviews();
   updateBuiltFields();
   updateDurationPreview();
-  openTrackedDialog($("#kitDialog"), replaceCurrentDialog);
+  updateDateDisplays();
+  openFormScreen($("#kitDialog"));
   requestAnimationFrame(() => $("#kitName").focus());
 }
 
@@ -403,6 +466,15 @@ function updateDurationPreview() {
   $("#durationPreview").textContent = days === null
     ? "開始日と完成日を入れると製作期間を自動計算します。"
     : `製作期間：${durationLabel(start, end)}`;
+}
+
+function updateDateDisplays() {
+  $$('[data-date-output]').forEach((output) => {
+    const input = $(`#${output.dataset.dateOutput}`);
+    const value = input?.value || "";
+    output.textContent = value ? value.replaceAll("-", " / ") : "日付を選択";
+    output.classList.toggle("has-value", Boolean(value));
+  });
 }
 
 async function imageToBlob(file) {
@@ -501,9 +573,8 @@ function renderSelectedPhotoPreviews() {
   $("#photoPreviewList").innerHTML = existingMarkup + selectedMarkup;
 }
 
-async function saveKit(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
+async function saveKit() {
+  const form = $("#kitForm");
   await state.pendingPhotoTask;
   if (!form.reportValidity()) return;
   const editing = state.kits.find((kit) => kit.id === $("#kitId").value);
@@ -540,8 +611,7 @@ async function saveKit(event) {
   };
   try {
     await putRecord("kits", record);
-    finishDialog($("#kitDialog"), "kits");
-    resetPhotoSelection();
+    finishForm($("#kitDialog"), "kits");
     await refreshState();
     showToast(editing ? "プラモデルを更新しました" : "プラモデルを登録しました");
   } catch (error) {
@@ -554,13 +624,13 @@ async function removeKit(id) {
   const kit = state.kits.find((item) => item.id === id);
   if (!kit || !confirm(`「${kit.name}」を削除しますか？`)) return;
   await deleteRecord("kits", id);
-  finishDialog($("#kitDialog"), "kits");
+  finishForm($("#kitDialog"), "kits");
   if ($("#kitDetailDialog").open) $("#kitDetailDialog").close();
   await refreshState();
   showToast("プラモデルを削除しました");
 }
 
-function openPaintForm(id = null, replaceCurrentDialog = false) {
+function openPaintForm(id = null) {
   const form = $("#paintForm");
   form.reset();
   $("#paintId").value = "";
@@ -591,7 +661,8 @@ function openPaintForm(id = null, replaceCurrentDialog = false) {
   }
   updatePaintOpenedFields();
   updateStockOutput();
-  openTrackedDialog($("#paintDialog"), replaceCurrentDialog);
+  updateDateDisplays();
+  openFormScreen($("#paintDialog"));
   requestAnimationFrame(() => $("#paintName").focus());
 }
 
@@ -603,9 +674,9 @@ function updateStockOutput() {
   $("#stockLevelOutput").textContent = `${$("#paintStockLevel").value}%`;
 }
 
-async function savePaint(event) {
-  event.preventDefault();
-  if (!event.currentTarget.reportValidity()) return;
+async function savePaint() {
+  const form = $("#paintForm");
+  if (!form.reportValidity()) return;
   const editing = state.paints.find((paint) => paint.id === $("#paintId").value);
   const opened = selectedRadio("paintOpened");
   const now = new Date().toISOString();
@@ -629,7 +700,7 @@ async function savePaint(event) {
   };
   try {
     await putRecord("paints", record);
-    finishDialog($("#paintDialog"), "paints");
+    finishForm($("#paintDialog"), "paints");
     await refreshState();
     showToast(editing ? "塗料を更新しました" : "塗料を登録しました");
   } catch (error) {
@@ -642,7 +713,7 @@ async function removePaint(id) {
   const paint = state.paints.find((item) => item.id === id);
   if (!paint || !confirm(`「${paint.name}」を削除しますか？`)) return;
   await deleteRecord("paints", id);
-  finishDialog($("#paintDialog"), "paints");
+  finishForm($("#paintDialog"), "paints");
   await refreshState();
   showToast("塗料を削除しました");
 }
@@ -753,10 +824,48 @@ async function importBackup(file) {
 function openAddChoice() { openTrackedDialog($("#addChoiceDialog")); }
 function openBackup() { openTrackedDialog($("#backupDialog")); }
 
+function openFormFromDialog(dialog, opener) {
+  if (dialog.open) dialog.close();
+  if (history.state?.dialog === dialog.id) history.replaceState({ view: state.activeView }, "", `#${state.activeView}`);
+  opener();
+}
+
+function restoreFormDraft() {
+  const rawDraft = sessionStorage.getItem(FORM_DRAFT_KEY);
+  if (!rawDraft) return;
+  try {
+    const draft = JSON.parse(rawDraft);
+    if (!draft || !["kitDialog", "paintDialog"].includes(draft.screenId)) return;
+    if (VALID_VIEWS.includes(draft.view)) setView(draft.view, { historyMode: "replace", scroll: false });
+    if (draft.screenId === "kitDialog") {
+      openKitForm(draft.recordId || null);
+      applyFormValues($("#kitForm"), draft.values);
+      updateBuiltFields();
+      updateDurationPreview();
+      updateDateDisplays();
+    } else {
+      openPaintForm(draft.recordId || null);
+      applyFormValues($("#paintForm"), draft.values);
+      updatePaintOpenedFields();
+      updateStockOutput();
+      updateDateDisplays();
+    }
+    state.formDirty = true;
+    persistFormDraft();
+  } catch (error) {
+    console.error(error);
+    sessionStorage.removeItem(FORM_DRAFT_KEY);
+  }
+}
+
 function bindEvents() {
   $$('[data-view]').forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   $$('[data-go-view]').forEach((button) => button.addEventListener("click", () => setView(button.dataset.goView)));
   window.addEventListener("popstate", (event) => {
+    if (state.activeForm && !state.activeForm.hidden) {
+      history.pushState({ view: state.activeView }, "", `#${state.activeView}`);
+      return;
+    }
     const openDialog = $$('dialog[open]').at(-1);
     if (openDialog) openDialog.close();
     const view = event.state?.view || location.hash.slice(1) || sessionStorage.getItem("plamo-stock-active-view") || "dashboard";
@@ -768,12 +877,13 @@ function bindEvents() {
   $("#heroAddPaint").addEventListener("click", () => openPaintForm());
   $("#addKitButton").addEventListener("click", () => openKitForm());
   $("#addPaintButton").addEventListener("click", () => openPaintForm());
-  $("#choiceAddKit").addEventListener("click", () => { $("#addChoiceDialog").close(); openKitForm(null, true); });
-  $("#choiceAddPaint").addEventListener("click", () => { $("#addChoiceDialog").close(); openPaintForm(null, true); });
+  $("#choiceAddKit").addEventListener("click", () => openFormFromDialog($("#addChoiceDialog"), () => openKitForm()));
+  $("#choiceAddPaint").addEventListener("click", () => openFormFromDialog($("#addChoiceDialog"), () => openPaintForm()));
   $("#backupButton").addEventListener("click", openBackup);
   $("#mobileBackupButton").addEventListener("click", openBackup);
 
   $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => dismissDialog(button.closest("dialog"))));
+  $$('[data-close-form]').forEach((button) => button.addEventListener("click", () => closeFormScreen(button.closest(".form-screen"))));
   $$('dialog').forEach((dialog) => {
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
@@ -788,7 +898,12 @@ function bindEvents() {
   $$('input[name="kitStatus"]').forEach((input) => input.addEventListener("change", updateBuiltFields));
   $("#kitStartedAt").addEventListener("change", updateDurationPreview);
   $("#kitCompletedAt").addEventListener("change", updateDurationPreview);
-  $("#kitForm").addEventListener("submit", saveKit);
+  $$('input[type="date"]').forEach((input) => {
+    input.addEventListener("input", updateDateDisplays);
+    input.addEventListener("change", updateDateDisplays);
+  });
+  $("#kitForm").addEventListener("submit", (event) => event.preventDefault());
+  $("#saveKitButton").addEventListener("click", saveKit);
   $("#deleteKitButton").addEventListener("click", () => removeKit($("#kitId").value));
   $("#cameraButton").addEventListener("click", () => $("#kitCameraInput").click());
   $("#galleryButton").addEventListener("click", () => $("#kitGalleryInput").click());
@@ -804,16 +919,31 @@ function bindEvents() {
   });
   $("#deleteExistingPhotos").addEventListener("change", renderSelectedPhotoPreviews);
 
-  [$("#kitForm"), $("#paintForm")].forEach((form) => form.addEventListener("keydown", (event) => {
-    const blocksImplicitSubmit = event.target.tagName === "INPUT" && ["text", "search", "number"].includes(event.target.type);
-    if (event.key === "Enter" && blocksImplicitSubmit) event.preventDefault();
-  }));
+  [$("#kitForm"), $("#paintForm")].forEach((form) => {
+    const markDirty = () => {
+      if (state.activeForm && !state.activeForm.hidden) {
+        state.formDirty = true;
+        persistFormDraft();
+      }
+    };
+    form.addEventListener("input", markDirty);
+    form.addEventListener("change", markDirty);
+    form.addEventListener("keydown", (event) => {
+      const blocksImplicitSubmit = ["INPUT", "SELECT"].includes(event.target.tagName);
+      if (event.key === "Enter" && blocksImplicitSubmit) event.preventDefault();
+    });
+  });
+
+  window.addEventListener("beforeunload", (event) => {
+    if (state.activeForm && !state.activeForm.hidden && state.formDirty) event.preventDefault();
+  });
 
   $$('input[name="paintOpened"]').forEach((input) => input.addEventListener("change", updatePaintOpenedFields));
   $("#paintStockLevel").addEventListener("input", updateStockOutput);
   $("#paintSwatch").addEventListener("input", (event) => { $("#paintSwatchText").value = event.target.value.toUpperCase(); });
   $("#paintSwatchText").addEventListener("input", (event) => { if (/^#[0-9a-f]{6}$/i.test(event.target.value)) $("#paintSwatch").value = event.target.value; });
-  $("#paintForm").addEventListener("submit", savePaint);
+  $("#paintForm").addEventListener("submit", (event) => event.preventDefault());
+  $("#savePaintButton").addEventListener("click", savePaint);
   $("#deletePaintButton").addEventListener("click", () => removePaint($("#paintId").value));
 
   [$("#kitSearch"), $("#kitStatusFilter"), $("#kitCategoryFilter"), $("#kitSort")].forEach((input) => input.addEventListener("input", renderAll));
@@ -835,7 +965,7 @@ function bindEvents() {
       $$('[data-detail-photo]').forEach((button) => button.classList.toggle("is-active", button === detailPhoto));
     }
     const editKit = event.target.closest("[data-edit-detail-kit]");
-    if (editKit) { $("#kitDetailDialog").close(); openKitForm(editKit.dataset.editDetailKit, true); }
+    if (editKit) openFormFromDialog($("#kitDetailDialog"), () => openKitForm(editKit.dataset.editDetailKit));
   });
 
   $("#exportButton").addEventListener("click", exportBackup);
@@ -854,6 +984,7 @@ async function init() {
   try {
     state.db = await openDatabase();
     await refreshState();
+    restoreFormDraft();
   } catch (error) {
     console.error(error);
     showToast("端末内の保存領域を開けませんでした");

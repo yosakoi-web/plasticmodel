@@ -1,4 +1,4 @@
-const CACHE_NAME = "plamo-stock-v2";
+const CACHE_NAME = "plamo-stock-v3";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icons/icon.svg"];
 
 self.addEventListener("install", (event) => {

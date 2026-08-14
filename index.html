@@ -194,11 +194,11 @@
       </nav>
     </div>
 
-    <dialog class="app-dialog form-dialog" id="kitDialog" aria-labelledby="kitDialogTitle">
+    <section class="form-screen" id="kitDialog" role="dialog" aria-modal="true" aria-labelledby="kitDialogTitle" hidden>
       <form id="kitForm">
         <div class="dialog-header">
           <div><p class="eyebrow">MODEL KIT</p><h2 id="kitDialogTitle">プラモデルを登録</h2></div>
-          <button class="close-button" value="cancel" aria-label="閉じる" type="button" data-close-dialog>×</button>
+          <button class="close-button" aria-label="入力をキャンセル" type="button" data-close-form>×</button>
         </div>
         <div class="dialog-body">
           <input type="hidden" id="kitId" />
@@ -228,8 +228,8 @@
               </div>
             </fieldset>
             <div class="form-grid">
-              <label class="field"><span>製作開始日</span><input type="date" id="kitStartedAt" /></label>
-              <label class="field"><span>完成日</span><input type="date" id="kitCompletedAt" /></label>
+              <label class="field date-field"><span>製作開始日</span><span class="date-control"><input type="date" id="kitStartedAt" /><span class="date-value" data-date-output="kitStartedAt">日付を選択</span><span class="date-icon" aria-hidden="true"></span></span></label>
+              <label class="field date-field"><span>完成日</span><span class="date-control"><input type="date" id="kitCompletedAt" /><span class="date-value" data-date-output="kitCompletedAt">日付を選択</span><span class="date-icon" aria-hidden="true"></span></span></label>
             </div>
             <p class="duration-preview" id="durationPreview">開始日と完成日を入れると製作期間を自動計算します。</p>
           </div>
@@ -237,7 +237,7 @@
           <div class="form-section">
             <h3>購入情報</h3>
             <div class="form-grid">
-              <label class="field"><span>購入日</span><input type="date" id="kitPurchaseDate" /></label>
+              <label class="field date-field"><span>購入日</span><span class="date-control"><input type="date" id="kitPurchaseDate" /><span class="date-value" data-date-output="kitPurchaseDate">日付を選択</span><span class="date-icon" aria-hidden="true"></span></span></label>
               <label class="field"><span>購入店</span><input id="kitStore" maxlength="60" placeholder="例：ヨドバシカメラ" /></label>
               <label class="field"><span>購入価格</span><div class="unit-input"><input type="number" id="kitPrice" min="0" max="9999999" inputmode="numeric" /><span>円</span></div></label>
               <label class="field"><span>保管場所</span><input id="kitLocation" maxlength="60" placeholder="例：棚A・上段" /></label>
@@ -265,17 +265,17 @@
         <div class="dialog-footer">
           <button class="danger-text-button" id="deleteKitButton" type="button" hidden>削除</button>
           <span class="footer-spacer"></span>
-          <button class="secondary-button" type="button" data-close-dialog>キャンセル</button>
-          <button class="primary-button" id="saveKitButton" type="submit">保存する</button>
+          <button class="secondary-button" type="button" data-close-form>キャンセル</button>
+          <button class="primary-button" id="saveKitButton" type="button">保存する</button>
         </div>
       </form>
-    </dialog>
+    </section>
 
-    <dialog class="app-dialog form-dialog" id="paintDialog" aria-labelledby="paintDialogTitle">
+    <section class="form-screen" id="paintDialog" role="dialog" aria-modal="true" aria-labelledby="paintDialogTitle" hidden>
       <form id="paintForm">
         <div class="dialog-header">
           <div><p class="eyebrow">PAINT COLOR</p><h2 id="paintDialogTitle">塗料を登録</h2></div>
-          <button class="close-button" value="cancel" aria-label="閉じる" type="button" data-close-dialog>×</button>
+          <button class="close-button" aria-label="入力をキャンセル" type="button" data-close-form>×</button>
         </div>
         <div class="dialog-body">
           <input type="hidden" id="paintId" />
@@ -306,7 +306,7 @@
           <div class="form-section">
             <h3>購入・保管情報</h3>
             <div class="form-grid">
-              <label class="field"><span>購入日</span><input type="date" id="paintPurchaseDate" /></label>
+              <label class="field date-field"><span>購入日</span><span class="date-control"><input type="date" id="paintPurchaseDate" /><span class="date-value" data-date-output="paintPurchaseDate">日付を選択</span><span class="date-icon" aria-hidden="true"></span></span></label>
               <label class="field"><span>購入店</span><input id="paintStore" maxlength="60" placeholder="例：模型店" /></label>
               <label class="field span-2"><span>保管場所</span><input id="paintLocation" maxlength="60" placeholder="例：塗料棚・2段目" /></label>
             </div>
@@ -316,11 +316,11 @@
         <div class="dialog-footer">
           <button class="danger-text-button" id="deletePaintButton" type="button" hidden>削除</button>
           <span class="footer-spacer"></span>
-          <button class="secondary-button" type="button" data-close-dialog>キャンセル</button>
-          <button class="primary-button" type="submit">保存する</button>
+          <button class="secondary-button" type="button" data-close-form>キャンセル</button>
+          <button class="primary-button" id="savePaintButton" type="button">保存する</button>
         </div>
       </form>
-    </dialog>
+    </section>
 
     <dialog class="app-dialog detail-dialog" id="kitDetailDialog" aria-labelledby="detailKitName">
       <div id="kitDetailContent"></div>
